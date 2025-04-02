@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金屬價格</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 15px;
+        }
+        
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 10px;
+            font-size: 1.8rem;
+        }
+        
+        .info-panel {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+        
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+            table-layout: fixed;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: right;
+            word-wrap: break-word;
+        }
+        
+        th {
+            background-color: #f2f2f2;
+            text-align: center;
+            font-size: 0.85rem;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .metal-name {
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        .price-container {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .price-usd {
+            color: #0066cc;
+            margin-bottom: 4px;
+        }
+        
+        .price-twd {
+            color: #cc6600;
+            font-size: 0.9em;
+        }
+        
+        .note {
+            font-size: 0.85rem;
+            margin-top: 20px;
+            color: #555;
+        }
+        
+        /* 手機版 RWD 設計 */
+        @media screen and (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .table-container {
+                overflow-x: auto;
+                margin-bottom: 15px;
+            }
+            
+            table {
+                min-width: 500px; /* 確保表格內容完整顯示 */
+            }
+            
+            th, td {
+                padding: 6px 4px;
+                font-size: 0.85rem;
+            }
+            
+            .price-container {
+                padding: 2px 0;
+            }
+            
+            .price-usd {
+                margin-bottom: 2px;
+            }
+            
+            .note {
+                font-size: 0.8rem;
+            }
+            
+            .info-panel {
+                font-size: 0.85rem;
+                padding: 8px;
+            }
+        }
+        
+        /* 超小螢幕的設計 */
+        @media screen and (max-width: 480px) {
+            h1 {
+                font-size: 1.3rem;
+            }
+            
+            th, td {
+                padding: 5px 3px;
+                font-size: 0.8rem;
+            }
+            
+            .note ul {
+                padding-left: 20px;
+            }
+        }
+    </style>
+    <script>
+        // 單位轉換常數
+        const CONSTANTS = {
+            // 1盎司 = 31.1035克
+            OUNCE_TO_GRAM: 31.1035,
+            // 1兩 = 37.5克
+            LIANG_TO_GRAM: 37.5,
+            // 1錢 = 3.75克
+            QIAN_TO_GRAM: 3.75
+        };
+
+        // 格式化金額，添加千分位符號
+        function formatCurrency(amount, decimals = 2) {
+            return amount.toLocaleString('zh-TW', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            });
+        }
+
+        // 定期獲取金屬價格數據
+        async function fetchMetalPrices() {
+            try {
+                // 添加時間戳參數來避免瀏覽器快取
+                const response = await fetch('/metal_prices.json?' + new Date().getTime());
+                const data = await response.json();
+                
+                // 更新時間戳
+                document.getElementById('timestamp').textContent = data.timestamp;
+                
+                // 更新匯率信息
+                const exchangeRate = parseFloat(data.usdtwd);
+                document.getElementById('exchange-rate').textContent = formatCurrency(exchangeRate);
+                
+                // 解析價格（確保是數字）
+                const goldPricePerOunce = parseFloat(data.gold);
+                const silverPricePerOunce = parseFloat(data.silver);
+                
+                if (!isNaN(goldPricePerOunce) && !isNaN(silverPricePerOunce) && !isNaN(exchangeRate)) {
+                    // 處理黃金價格
+                    updatePriceDisplay('gold', goldPricePerOunce, exchangeRate);
+                    
+                    // 處理白銀價格
+                    updatePriceDisplay('silver', silverPricePerOunce, exchangeRate);
+                    
+                    console.log('金屬價格已更新');
+                } else {
+                    console.error('無效的價格或匯率數據');
+                }
+            } catch (error) {
+                console.error('獲取數據失敗:', error);
+            }
+        }
+        
+        // 更新特定金屬的所有單位價格顯示
+        function updatePriceDisplay(metal, pricePerOunce, exchangeRate) {
+            // 計算各單位的美金價格
+            const pricePerGram = pricePerOunce / CONSTANTS.OUNCE_TO_GRAM;
+            const pricePerLiang = pricePerGram * CONSTANTS.LIANG_TO_GRAM;
+            const pricePerQian = pricePerGram * CONSTANTS.QIAN_TO_GRAM;
+            
+            // 更新盎司價格
+            document.getElementById(`${metal}-price-oz-usd`).textContent = `$${formatCurrency(pricePerOunce)}`;
+            document.getElementById(`${metal}-price-oz-twd`).textContent = `NT$${formatCurrency(pricePerOunce * exchangeRate)}`;
+            
+            // 更新克價格
+            document.getElementById(`${metal}-price-g-usd`).textContent = `$${formatCurrency(pricePerGram)}`;
+            document.getElementById(`${metal}-price-g-twd`).textContent = `NT$${formatCurrency(pricePerGram * exchangeRate)}`;
+            
+            // 更新兩價格
+            document.getElementById(`${metal}-price-liang-usd`).textContent = `$${formatCurrency(pricePerLiang)}`;
+            document.getElementById(`${metal}-price-liang-twd`).textContent = `NT$${formatCurrency(pricePerLiang * exchangeRate)}`;
+            
+            // 更新錢價格
+            document.getElementById(`${metal}-price-qian-usd`).textContent = `$${formatCurrency(pricePerQian)}`;
+            document.getElementById(`${metal}-price-qian-twd`).textContent = `NT$${formatCurrency(pricePerQian * exchangeRate)}`;
+        }
+        
+        // 頁面載入後開始定期獲取資料
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchMetalPrices(); // 初次獲取
+            setInterval(fetchMetalPrices, 10000); // 每10秒更新一次
+        });
+    </script>
+</head>
+<body>
+    <h1>即時金屬價格</h1>
+    
+    <div class="info-panel">
+        <p>更新時間: <span id="timestamp">載入中...</span></p>
+        <p>美元兌台幣匯率: <span id="exchange-rate">--</span></p>
+    </div>
+    
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>金屬種類</th>
+                    <th>盎司 (oz)</th>
+                    <th>克 (g)</th>
+                    <th>兩 (市兩)</th>
+                    <th>錢</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="metal-name">黃金 (Gold)</td>
+                    <td>
+                        <div class="price-container">
+                            <div class="price-usd" id="gold-price-oz-usd">--</div>
+                            <div class="price-twd" id="gold-price-oz-twd">--</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="price-container">
+                            <div class="price-usd" id="gold-price-g-usd">--</div>
+                            <div class="price-twd" id="gold-price-g-twd">--</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="price-container">
+                            <div class="price-usd" id="gold-price-liang-usd">--</div>
+                            <div class="price-twd" id="gold-price-liang-twd">--</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="price-container">
+                            <div class="price-usd" id="gold-price-qian-usd">--</div>
+                            <div class="price-twd" id="gold-price-qian-twd">--</div>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="metal-name">白銀 (Silver)</td>
+                    <td>
+                        <div class="price-container">
+                            <div class="price-usd" id="silver-price-oz-usd">--</div>
+                            <div class="price-twd" id="silver-price-oz-twd">--</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="price-container">
+                            <div class="price-usd" id="silver-price-g-usd">--</div>
+                            <div class="price-twd" id="silver-price-g-twd">--</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="price-container">
+                            <div class="price-usd" id="silver-price-liang-usd">--</div>
+                            <div class="price-twd" id="silver-price-liang-twd">--</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="price-container">
+                            <div class="price-usd" id="silver-price-qian-usd">--</div>
+                            <div class="price-twd" id="silver-price-qian-twd">--</div>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="note">
+        <p>單位換算：</p>
+        <ul>
+            <li>1 盎司 (oz) = 31.1035 克 (g)</li>
+            <li>1 兩 = 37.5 克 (g)</li>
+            <li>1 錢 = 3.75 克 (g)</li>
+        </ul>
+    </div>
+</body>
+</html>
