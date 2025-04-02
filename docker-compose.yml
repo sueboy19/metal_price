@@ -24,3 +24,8 @@ services:
       - ./public:/public
     depends_on:
       - metal-price-tracker
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
