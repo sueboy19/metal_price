@@ -5,9 +5,13 @@ services:
       - ./data:/data
     environment:
       - FETCH_INTERVAL=30
-      - EXCHANGE_CONNECT_TIMEOUT=15
-      - EXCHANGE_MAX_TIMEOUT=3600
+      - EXCHANGE_RATE_INTERVAL=3600
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   nginx:
     image: nginx:alpine
