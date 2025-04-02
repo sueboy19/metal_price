@@ -10,6 +10,11 @@ mkdir -p "$(dirname "$OUTPUT_FILE")"
 
 # 從環境變數取得間隔秒數，如果未設定則使用預設值
 INTERVAL=${FETCH_INTERVAL:-30}
+# 匯率獲取頻率（秒數），預設為300秒（5分鐘）
+EXCHANGE_RATE_INTERVAL=${EXCHANGE_RATE_INTERVAL:-300}
+
+# 記錄上次匯率獲取時間的變量
+LAST_EXCHANGE_FETCH=0
 
 # 日誌函數
 log_info() {
@@ -67,6 +72,24 @@ read_backup_rate() {
 
 # 獲取匯率函數 - 確保返回純數值
 get_exchange_rate() {
+  # 檢查是否需要從網路獲取新匯率或從備用檔案讀取
+  local current_time=$(date +%s)
+  local time_diff=$((current_time - LAST_EXCHANGE_FETCH))
+  
+  # 如果距離上次獲取時間未滿設定的間隔，則使用備用檔案中的值
+  if [ $time_diff -lt $EXCHANGE_RATE_INTERVAL ] && [ $LAST_EXCHANGE_FETCH -ne 0 ]; then
+    log_info "距離上次匯率獲取時間不足 $EXCHANGE_RATE_INTERVAL 秒，使用備用檔案" >&2
+    local backup_rate=$(read_backup_rate)
+    if [ -n "$backup_rate" ] && [ "$(echo "$backup_rate" | grep -E '^[0-9]+(\.[0-9]+)?$')" ]; then
+      return_value=$backup_rate
+      echo "$return_value"
+      return 0
+    fi
+  fi
+  
+  # 更新上次獲取時間
+  LAST_EXCHANGE_FETCH=$current_time
+  
   # 暫存所有輸出到臨時變數
   local log_output=$(mktemp)
   
@@ -263,6 +286,7 @@ write_json_error() {
 
 # 主循環
 log_info "開始運行金屬價格追蹤器，每 $INTERVAL 秒更新一次..."
+log_info "匯率獲取頻率設定為每 $EXCHANGE_RATE_INTERVAL 秒更新一次"
 
 while true; do
   # 分隔線與時間戳
