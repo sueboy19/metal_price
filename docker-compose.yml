@@ -16,6 +16,6 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./data:/data
-      - ./public:/data/public
+      - ./public:/public
     depends_on:
       - metal-price-tracker
