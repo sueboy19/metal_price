@@ -55,13 +55,18 @@ save_backup_rate() {
 # 從備用檔案讀取匯率
 read_backup_rate() {
   if [ -f "$BACKUP_RATE_FILE" ]; then
-    local rate=$(cat "$BACKUP_RATE_FILE" 2>/dev/null | awk '{print $1}')
-    local timestamp=$(cat "$BACKUP_RATE_FILE" 2>/dev/null | cut -d' ' -f2-)
+    local file_content=$(cat "$BACKUP_RATE_FILE" 2>/dev/null)
     
-    if [ -n "$rate" ] && [ "$(echo "$rate" | grep -E '^[0-9]+(\.[0-9]+)?$')" ]; then
-      log_warning "使用備用匯率: $rate (保存於 $timestamp)" >&2
-      echo "$rate"
-      return 0
+    # 檢查檔案內容是否不為空
+    if [ -n "$file_content" ]; then
+      local rate=$(echo "$file_content" | awk '{print $1}')
+      local timestamp=$(echo "$file_content" | cut -d' ' -f2-)
+      
+      if [ -n "$rate" ] && [ "$(echo "$rate" | grep -E '^[0-9]+(\.[0-9]+)?$')" ]; then
+        log_info "從備份檔案獲取匯率: $rate (保存於 $timestamp)" >&2
+        echo "$rate"
+        return 0
+      fi
     fi
   fi
   
@@ -70,25 +75,79 @@ read_backup_rate() {
   return 1
 }
 
+# 從備份檔案讀取時間戳記
+get_last_exchange_time() {
+  if [ -f "$BACKUP_RATE_FILE" ]; then
+    local file_content=$(cat "$BACKUP_RATE_FILE" 2>/dev/null)
+    
+    # 檢查檔案內容是否不為空
+    if [ -n "$file_content" ]; then
+      # 提取時間戳部分（跳過第一個欄位即匯率）
+      local timestamp=$(echo "$file_content" | cut -d' ' -f2-)
+      
+      if [ -n "$timestamp" ]; then
+        # 嘗試將時間戳記轉換為Unix時間戳
+        # macOS上使用date -j，Linux上可能需要調整
+        local unix_timestamp
+        
+        if [ "$(uname)" = "Darwin" ]; then
+          # macOS (Darwin) 系統
+          unix_timestamp=$(date -j -f "%Y-%m-%d %H:%M:%S" "$timestamp" "+%s" 2>/dev/null)
+        else
+          # Linux 或其他系統，使用不同的date命令格式
+          unix_timestamp=$(date -d "$timestamp" "+%s" 2>/dev/null)
+        fi
+        
+        if [ $? -eq 0 ] && [ -n "$unix_timestamp" ]; then
+          log_info "從備份檔案獲取上次匯率時間成功: $timestamp (Unix時間戳: $unix_timestamp)" >&2
+          echo "$unix_timestamp"
+          return 0
+        fi
+      fi
+    fi
+  fi
+  
+  log_warning "無法從備份檔案獲取有效的時間戳記" >&2
+  echo "0"
+  return 1
+}
+
+# 初始化 LAST_EXCHANGE_FETCH 變數
+initialize_last_exchange_time() {
+  local unix_timestamp=$(get_last_exchange_time)
+  
+  if [ -n "$unix_timestamp" ] && [ "$unix_timestamp" -gt 0 ]; then
+    LAST_EXCHANGE_FETCH=$unix_timestamp
+    local readable_time=$(date -r $LAST_EXCHANGE_FETCH "+%Y-%m-%d %H:%M:%S" 2>/dev/null)
+    log_info "成功初始化上次匯率獲取時間: $readable_time (Unix時間戳: $LAST_EXCHANGE_FETCH)" >&2
+  else
+    LAST_EXCHANGE_FETCH=0
+    log_warning "初始化上次匯率獲取時間失敗，設置為 0" >&2
+  fi
+}
+
 # 獲取匯率函數 - 確保返回純數值
 get_exchange_rate() {
   # 檢查是否需要從網路獲取新匯率或從備用檔案讀取
   local current_time=$(date +%s)
   local time_diff=$((current_time - LAST_EXCHANGE_FETCH))
   
-  # 如果距離上次獲取時間未滿設定的間隔，則使用備用檔案中的值
-  if [ $time_diff -lt $EXCHANGE_RATE_INTERVAL ] && [ $LAST_EXCHANGE_FETCH -ne 0 ]; then
-    log_info "距離上次匯率獲取時間不足 $EXCHANGE_RATE_INTERVAL 秒，使用備用檔案" >&2
+  # 增加日誌輸出以便追蹤
+  log_info "當前時間: $current_time, 上次匯率獲取時間: $LAST_EXCHANGE_FETCH, 時間差: $time_diff 秒" >&2
+  
+  # 修正條件判斷：第一次運行時 LAST_EXCHANGE_FETCH 為 0，time_diff 會很大
+  # 只有當 LAST_EXCHANGE_FETCH 不為 0（非第一次運行）且時間差小於間隔時，才使用備用檔案
+  if [ $LAST_EXCHANGE_FETCH -ne 0 ] && [ $time_diff -lt $EXCHANGE_RATE_INTERVAL ]; then
+    log_info "距離上次匯率獲取時間 ($time_diff 秒) 不足 $EXCHANGE_RATE_INTERVAL 秒，使用備用檔案" >&2
     local backup_rate=$(read_backup_rate)
+    
     if [ -n "$backup_rate" ] && [ "$(echo "$backup_rate" | grep -E '^[0-9]+(\.[0-9]+)?$')" ]; then
-      return_value=$backup_rate
-      echo "$return_value"
+      echo "$backup_rate"
       return 0
     fi
   fi
   
-  # 更新上次獲取時間
-  LAST_EXCHANGE_FETCH=$current_time
+  log_info "需要從網路獲取新匯率" >&2
   
   # 暫存所有輸出到臨時變數
   local log_output=$(mktemp)
@@ -106,6 +165,8 @@ get_exchange_rate() {
       
       # 檢查匯率是否為有效數值
       if [ "$(echo "$rate" | grep -E '^[0-9]+(\.[0-9]+)?$')" ]; then
+        # 更新上次獲取時間 - 移到成功獲取後
+        LAST_EXCHANGE_FETCH=$current_time
         # 成功獲取時，保存到備用檔案 - 重定向輸出到標準錯誤
         save_backup_rate "$rate" >&2
         # 僅輸出純數值
@@ -127,6 +188,8 @@ get_exchange_rate() {
     if [ -n "$rate" ] && [ "$(echo "$rate" | grep -E '^[0-9]+(\.[0-9]+)?$')" ]; then
       echo "從 Google Finance 獲取匯率成功: $rate" >> "$log_output"
       
+      # 更新上次獲取時間 - 移到成功獲取後
+      LAST_EXCHANGE_FETCH=$current_time
       # 成功獲取時，保存到備用檔案 - 重定向輸出到標準錯誤
       save_backup_rate "$rate" >&2
       # 僅輸出純數值
@@ -287,6 +350,9 @@ write_json_error() {
 # 主循環
 log_info "開始運行金屬價格追蹤器，每 $INTERVAL 秒更新一次..."
 log_info "匯率獲取頻率設定為每 $EXCHANGE_RATE_INTERVAL 秒更新一次"
+
+# 初始化上次匯率獲取時間
+initialize_last_exchange_time
 
 while true; do
   # 分隔線與時間戳
