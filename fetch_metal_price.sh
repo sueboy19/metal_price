@@ -2,6 +2,8 @@
 
 # 設定輸出文件 - 修改為相對路徑或使用者目錄下的路徑
 OUTPUT_FILE="./metal_prices.json"  # 改為當前目錄
+# 設定備用匯率檔案
+BACKUP_RATE_FILE="./backup_exchange_rate.txt"
 
 # 確保輸出目錄存在
 mkdir -p "$(dirname "$OUTPUT_FILE")"
@@ -26,6 +28,33 @@ log_error() {
   echo "❌ $1"
 }
 
+# 保存匯率到備用檔案
+save_backup_rate() {
+  local rate="$1"
+  local timestamp="$(date "+%Y-%m-%d %H:%M:%S")"
+  
+  echo "$rate $timestamp" > "$BACKUP_RATE_FILE"
+  log_info "已將匯率 $rate 保存到備用檔案 ($timestamp)"
+}
+
+# 從備用檔案讀取匯率
+read_backup_rate() {
+  if [ -f "$BACKUP_RATE_FILE" ]; then
+    local rate=$(cat "$BACKUP_RATE_FILE" | awk '{print $1}')
+    local timestamp=$(cat "$BACKUP_RATE_FILE" | cut -d' ' -f2-)
+    
+    if [ -n "$rate" ] && [ "$(echo "$rate" | grep -E '^[0-9]+(\.[0-9]+)?$')" ]; then
+      log_warning "使用備用匯率: $rate (保存於 $timestamp)"
+      echo "$rate"
+      return 0
+    fi
+  fi
+  
+  log_warning "備用匯率檔案不存在或無效，使用預設值 31.5"
+  echo "31.5"
+  return 1
+}
+
 # 獲取匯率函數 - 確保返回純數值
 get_exchange_rate() {
   # 暫存所有輸出到臨時變數
@@ -41,6 +70,8 @@ get_exchange_rate() {
     local rate=$(echo "$response" | jq '.chart.result[0].meta.regularMarketPrice' 2>/dev/null)
     if [ $? -eq 0 ] && [ -n "$rate" ] && [ "$rate" != "null" ]; then
       echo "從雅虎財經獲取匯率成功: $rate" >> "$log_output"
+      # 成功獲取時，保存到備用檔案
+      save_backup_rate "$rate"
       # 僅輸出純數值
       echo "$rate"
       rm -f "$log_output"
@@ -48,23 +79,7 @@ get_exchange_rate() {
     fi
   fi
   
-  # 2. ExchangeRate-API
-  echo "嘗試從 ExchangeRate-API 獲取匯率..." >> "$log_output"
-  local response=$(curl -s --connect-timeout 8 --max-time 15 \
-                "https://open.er-api.com/v6/latest/USD")
-  
-  if [ $? -eq 0 ] && [ -n "$response" ]; then
-    local rate=$(echo "$response" | jq '.rates.TWD' 2>/dev/null)
-    if [ $? -eq 0 ] && [ -n "$rate" ] && [ "$rate" != "null" ]; then
-      echo "從 ExchangeRate-API 獲取匯率成功: $rate" >> "$log_output"
-      # 僅輸出純數值
-      echo "$rate"
-      rm -f "$log_output"
-      return 0
-    fi
-  fi
-  
-  # 3. Google Finance
+  # 2. Google Finance (原本是第3個來源)
   echo "嘗試從 Google Finance 獲取匯率..." >> "$log_output"
   local response=$(curl -s --connect-timeout 8 --max-time 15 \
                 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
@@ -74,6 +89,8 @@ get_exchange_rate() {
     local rate=$(echo "$response" | grep -o 'data-last-price="[0-9.]*"' | grep -o '[0-9.]*')
     if [ -n "$rate" ]; then
       echo "從 Google Finance 獲取匯率成功: $rate" >> "$log_output"
+      # 成功獲取時，保存到備用檔案
+      save_backup_rate "$rate"
       # 僅輸出純數值
       echo "$rate"
       rm -f "$log_output"
@@ -81,24 +98,16 @@ get_exchange_rate() {
     fi
   fi
   
-  # 4. 台灣銀行網站
-  echo "嘗試從台灣銀行網站獲取匯率..." >> "$log_output"
-  local response=$(curl -s --connect-timeout 8 --max-time 15 \
-                "https://rate.bot.com.tw/xrt?Lang=zh-TW")
-  
-  if [ $? -eq 0 ] && [ -n "$response" ]; then
-    local rate=$(echo "$response" | grep -A5 "美金" | grep -o '<td.*>[0-9.]*' | head -1 | grep -o '[0-9.]*')
-    if [ -n "$rate" ]; then
-      echo "從台灣銀行網站獲取匯率成功: $rate" >> "$log_output"
-      # 僅輸出純數值
-      echo "$rate"
-      rm -f "$log_output"
-      return 0
-    fi
+  # 所有來源都失敗，讀取備用檔案
+  echo "所有匯率來源都失敗，嘗試讀取備用匯率檔案" >> "$log_output"
+  local backup_rate=$(read_backup_rate)
+  if [ -n "$backup_rate" ]; then
+    echo "使用備用匯率檔案的匯率: $backup_rate" >> "$log_output"
+    echo "$backup_rate"
+    rm -f "$log_output"
+    return 0
   fi
   
-  # 所有來源都失敗
-  echo "所有匯率來源都失敗" >> "$log_output"
   cat "$log_output" >&2  # 輸出日誌到標準錯誤
   rm -f "$log_output"
   return 1
@@ -269,18 +278,23 @@ while true; do
     log_warning "使用備用銀價: $SILVER_PRICE"
   fi
   
-  # 獲取匯率 (嘗試多個來源)
+  # 獲取匯率 (嘗試多個來源，失敗時使用備用檔案)
   EXCHANGE_RATE=$(get_exchange_rate)
   
-  # 確保 EXCHANGE_RATE 是純數值 - 修正語法錯誤
+  # 確保 EXCHANGE_RATE 是純數值
   if [ $? -eq 0 ] && [ "$(echo "$EXCHANGE_RATE" | grep -E '^[0-9]+(\.[0-9]+)?$')" ]; then
     EXCHANGE_SUCCESS=true
     log_info "匯率: $EXCHANGE_RATE TWD/USD"
   else
     log_error "獲得的匯率不是有效數值: $EXCHANGE_RATE"
-    EXCHANGE_RATE="31.5"  # 使用備用匯率
+    # 再次嘗試讀取備用檔案
+    EXCHANGE_RATE=$(read_backup_rate)
+    # 如果備用檔案也失敗，使用最後的備用值
+    if [ $? -ne 0 ]; then
+      EXCHANGE_RATE="31.5"  # 最終備用匯率
+      log_warning "備用檔案讀取失敗，使用最終備用匯率: $EXCHANGE_RATE TWD/USD"
+    fi
     EXCHANGE_SUCCESS=true
-    log_warning "使用備用匯率: $EXCHANGE_RATE TWD/USD"
   fi
   
   # 檢查文件目錄
