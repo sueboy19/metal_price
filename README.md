@@ -51,16 +51,24 @@ services:
   metal-price-tracker:
     # ...existing code...
     environment:
-      - FETCH_INTERVAL=10 # 設置獲取資料的間隔秒數，可以根據需求調整
+      - FETCH_INTERVAL=30 # 設置獲取資料的間隔秒數，可以根據需求調整
+      - EXCHANGE_RATE_INTERVAL=3600 # 設置獲取匯率的間隔秒數
 ```
 
-### FETCH_INTERVAL 參數說明
+### 參數說明
 
-- 此參數控制系統獲取最新金屬價格的頻率（以秒為單位）
-- 預設值為 10 秒
-- 建議值：
-  - 開發測試環境：5-10 秒
-  - 生產環境：30-60 秒（避免過於頻繁的 API 請求）
+- **FETCH_INTERVAL**：控制系統獲取最新金屬價格的頻率（以秒為單位）
+
+  - 預設值：30 秒
+  - 建議值：
+    - 開發測試環境：10-30 秒
+    - 生產環境：60-300 秒（避免過於頻繁的 API 請求）
+
+- **EXCHANGE_RATE_INTERVAL**：控制系統獲取匯率的頻率（以秒為單位）
+  - 預設值：3600 秒（1 小時）
+  - 建議值：
+    - 開發測試環境：600-1800 秒
+    - 生產環境：3600-86400 秒（匯率變化相對較慢）
 
 注意：設置過短的間隔可能會導致 API 請求限制或 IP 被暫時封鎖。
 
@@ -69,10 +77,13 @@ services:
 ```
 metal_price/
 ├── data/                 # 數據存儲目錄
+│   └── metal_prices.json # 最新金屬價格數據
+│   └── backup_exchange_rate.txt # 備用匯率檔案
 ├── public/               # 靜態文件
 │   └── index.html        # 網頁前端
 ├── nginx/
-│   └── nginx.conf        # Nginx 配置
+│   └── nginx.conf        # Nginx 主要配置
+│   └── rate_limit.conf   # Nginx 請求限制配置
 ├── Dockerfile            # Docker 映像配置
 ├── docker-compose.yml    # Docker Compose 配置
 ├── fetch_metal_price.sh  # 數據獲取腳本
