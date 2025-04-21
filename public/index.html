@@ -42,6 +42,17 @@
             word-wrap: break-word;
         }
         
+        /* 設定第一欄（單位欄）寬度較小 */
+        th:first-child, td:first-child {
+            width: 20%;
+            min-width: 70px;
+        }
+        
+        /* 設定金屬欄位寬度比例 */
+        th:not(:first-child), td:not(:first-child) {
+            width: 40%; /* 更平均的分配 */
+        }
+        
         th {
             background-color: #f2f2f2;
             text-align: center;
@@ -60,6 +71,8 @@
         .price-container {
             display: flex;
             flex-direction: column;
+            max-width: 150px; /* 限制最大寬度 */
+            margin: 0 auto; /* 在欄位中置中 */
         }
         
         .price-usd {
@@ -94,7 +107,21 @@
             }
             
             table {
-                min-width: 500px; /* 確保表格內容完整顯示 */
+                width: 100%;
+                min-width: auto; /* 移除最小寬度限制，讓表格可以完全適應螢幕 */
+            }
+            
+            /* 手機上調整第一欄寬度 */
+            th:first-child, td:first-child {
+                width: 25%;
+                min-width: 60px;
+                font-size: 0.8rem;
+                padding: 6px 2px;
+            }
+            
+            /* 調整其他欄位寬度 */
+            th:not(:first-child), td:not(:first-child) {
+                width: 37.5%;
             }
             
             th, td {
@@ -104,6 +131,7 @@
             
             .price-container {
                 padding: 2px 0;
+                max-width: 100px;
             }
             
             .price-usd {
@@ -126,9 +154,27 @@
                 font-size: 1.3rem;
             }
             
+            /* 超小螢幕進一步調整單位欄 */
+            th:first-child, td:first-child {
+                width: 22%;
+                min-width: 50px;
+                font-size: 0.75rem;
+                padding: 4px 2px;
+            }
+            
+            /* 保持金屬欄位合理比例 */
+            th:not(:first-child), td:not(:first-child) {
+                width: 39%;
+                padding: 4px 2px;
+            }
+            
             th, td {
                 padding: 5px 3px;
                 font-size: 0.8rem;
+            }
+            
+            .price-container {
+                max-width: 85px;
             }
             
             .note ul {
@@ -232,19 +278,14 @@
         <table>
             <thead>
                 <tr>
-                    <th>金屬種類</th>
-                    <th>盎司 (oz)</th>
-                    <th>克 (g)</th>
-                    <th>兩 (市兩)</th>
-                    <th>錢</th>
+                    <th>單位/金屬</th>
+                    <th>黃金 (Gold)<br /><a href="https://www.macrotrends.net/1378/dow-to-gold-ratio-100-year-historical-chart">道金比</a></th>
+                    <th>白銀 (Silver)<br /><a href="https://www.macrotrends.net/2610/dow-to-silver-ratio-100-year-historical-chart">道銀比</a></th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td class="metal-name">
-                        黃金 (Gold)<br />
-                        <a href="https://www.macrotrends.net/1378/dow-to-gold-ratio-100-year-historical-chart">道金比</a>
-                    </td>
+                    <td class="metal-name">盎司 (oz)</td>
                     <td>
                         <div class="price-container">
                             <div class="price-usd" id="gold-price-oz-usd">--</div>
@@ -253,32 +294,17 @@
                     </td>
                     <td>
                         <div class="price-container">
-                            <div class="price-usd" id="gold-price-g-usd">--</div>
-                            <div class="price-twd" id="gold-price-g-twd">--</div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="price-container">
-                            <div class="price-usd" id="gold-price-liang-usd">--</div>
-                            <div class="price-twd" id="gold-price-liang-twd">--</div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="price-container">
-                            <div class="price-usd" id="gold-price-qian-usd">--</div>
-                            <div class="price-twd" id="gold-price-qian-twd">--</div>
+                            <div class="price-usd" id="silver-price-oz-usd">--</div>
+                            <div class="price-twd" id="silver-price-oz-twd">--</div>
                         </div>
                     </td>
                 </tr>
                 <tr>
-                    <td class="metal-name">
-                        白銀 (Silver)<br />
-                        <a href="https://www.macrotrends.net/2610/dow-to-silver-ratio-100-year-historical-chart">道銀比</a>
-                    </td>
+                    <td class="metal-name">克 (g)</td>
                     <td>
                         <div class="price-container">
-                            <div class="price-usd" id="silver-price-oz-usd">--</div>
-                            <div class="price-twd" id="silver-price-oz-twd">--</div>
+                            <div class="price-usd" id="gold-price-g-usd">--</div>
+                            <div class="price-twd" id="gold-price-g-twd">--</div>
                         </div>
                     </td>
                     <td>
@@ -287,10 +313,28 @@
                             <div class="price-twd" id="silver-price-g-twd">--</div>
                         </div>
                     </td>
+                </tr>
+                <tr>
+                    <td class="metal-name">兩 (市兩)</td>
+                    <td>
+                        <div class="price-container">
+                            <div class="price-usd" id="gold-price-liang-usd">--</div>
+                            <div class="price-twd" id="gold-price-liang-twd">--</div>
+                        </div>
+                    </td>
                     <td>
                         <div class="price-container">
                             <div class="price-usd" id="silver-price-liang-usd">--</div>
                             <div class="price-twd" id="silver-price-liang-twd">--</div>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="metal-name">錢</td>
+                    <td>
+                        <div class="price-container">
+                            <div class="price-usd" id="gold-price-qian-usd">--</div>
+                            <div class="price-twd" id="gold-price-qian-twd">--</div>
                         </div>
                     </td>
                     <td>
