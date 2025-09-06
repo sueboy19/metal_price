@@ -72,6 +72,13 @@ services:
 
 注意：設置過短的間隔可能會導致 API 請求限制或 IP 被暫時封鎖。
 
+## 提醒
+請勿用 curl 測試，會無法連通，因為 nginx 設定會做處理，記得加上 Agent 相關資訊  
+
+```
+curl -A "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:32.0) Gecko/20100101 Firefox/32.0" http://localhost:8088
+```
+
 ## 文件結構
 
 ```
