@@ -1,0 +1,31 @@
+services:
+  metal-price-tracker:
+    build: .
+    volumes:
+      - ./data:/data
+    environment:
+      - FETCH_INTERVAL=30
+      - EXCHANGE_RATE_INTERVAL=3600
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    image: nginx:alpine
+    expose:
+      - :80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/rate_limit.conf:/etc/nginx/conf.d/rate_limit.conf
+      - ./data:/data
+      - ./public:/public
+    depends_on:
+      - metal-price-tracker
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
